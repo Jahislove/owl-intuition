@@ -161,23 +161,25 @@ def query_db(sql):
             db_bck.text_factory = str #tell sqlite to work with str instead of unicode
             cursor_bck = db_bck.cursor()
 
-            cursor_bck.execute("""SELECT 'DEFAULT' as id, date, chan1, chan2, chan3, battery, niveau FROM detail ORDER BY date ASC """)
+            cursor_bck.execute("""SELECT  date, chan1, chan2, chan3, battery, niveau FROM detail ORDER BY date ASC """)
             result_detail = cursor_bck.fetchall ()
-            cursor_bck.execute("""SELECT 'DEFAULT' as id, date, chan1, chan2, chan3 FROM journalier ORDER BY date ASC """)
+            cursor_bck.execute("""SELECT  date, chan1, chan2, chan3 FROM journalier ORDER BY date ASC """)
             result_journalier = cursor_bck.fetchall ()
-            cursor_bck.execute("""SELECT 'DEFAULT' as id, date, costFUL1, costFUL2, costFUL3, costECO1, costECO2, costECO3 FROM cout ORDER BY date ASC """)
+            cursor_bck.execute("""SELECT  date, costFUL1, costFUL2, costFUL3, costECO1, costECO2, costECO3 FROM cout ORDER BY date ASC """)
             result_cout = cursor_bck.fetchall ()
-            cursor_bck.execute("""SELECT 'DEFAULT' as id, date, temp, weather FROM meteo ORDER BY date ASC """)
+            cursor_bck.execute("""SELECT  date, temp, weather FROM meteo ORDER BY date ASC """)
             result_meteo = cursor_bck.fetchall ()
            
             for row in result_detail:
-                cursor.execute("""INSERT INTO detail VALUES {0}""".format(row))
+                backup_row += 1
+                cursor.execute("""INSERT INTO detail (date, chan1, chan2, chan3, battery, niveau) VALUES ('%s','%s','%s','%s','%s','%s')"""% (row[0],row[1],row[2],row[3],row[4],row[5]))
             for row in result_journalier:
-                cursor.execute("""INSERT INTO journalier VALUES {0}""".format(row))
+                cursor.execute("""INSERT INTO journalier (date, chan1, chan2, chan3) VALUES ('%s','%s','%s','%s')"""% (row[0],row[1],row[2],row[3]))
             for row in result_cout:
-                cursor.execute("""INSERT INTO cout VALUES {0}""".format(row))
+                cursor.execute("""INSERT INTO cout (date, costFUL1, costFUL2, costFUL3, costECO1, costECO2, costECO3) VALUES ('%s','%s','%s','%s','%s','%s','%s')"""% (row[0],row[1],row[2],row[3],row[4],row[5],row[6]))
             for row in result_meteo:
-                cursor.execute("""INSERT INTO meteo VALUES {0}""".format(row))
+                cursor.execute("""INSERT INTO meteo (date, temp, weather) VALUES ('%s','%s','%s')"""% (row[0],row[1],row[2]))
+
                 
             db_bck.close()
             log = time.strftime('%Y-%m-%d %H:%M:%S') + " INFO : " + str(backup_row) + " rows restored to MySQL\n"
@@ -193,6 +195,8 @@ def query_db(sql):
             db.commit()
             db.close()
             logfile.close
+            # costFUL1, costFUL2, costFUL3, costECO1, costECO2, costECO3 = query_db_2("""SELECT costFUL1, costFUL2, costFUL3, costECO1, costECO2, costECO3 FROM cout  ORDER BY id DESC LIMIT 1""")
+            # data["phase1_total"], data["phase2_total"], data["phase3_total"] = query_db_3("""SELECT chan1, chan2, chan3 FROM journalier ORDER BY id DESC LIMIT 1""")
 
 
         #---------------------------------------------------------------#
@@ -237,7 +241,6 @@ def query_db(sql):
 
         backup_mode = 1
         cursor_bck.execute(sql)
-        backup_row += 1
         db_bck.commit()
         db_bck.close()
 
@@ -278,7 +281,7 @@ def query_db_3(sql):
         logfile = open(PATH_OWL + "owl.log", "a")
         log = time.strftime('%Y-%m-%d %H:%M:%S') + " INFO : owl.py started\n" 
         logfile.write(log)
-        log = time.strftime('%Y-%m-%d %H:%M:%S') + " INFO : init data : Phase1 = " + str(result[0]) + " Kwh, Phase2 = " + str(result[1]) + " Kwh, Phase3 = " + str(result[1]) + " Kwh\n"
+        log = time.strftime('%Y-%m-%d %H:%M:%S') + " INFO : init data : Phase1 = " + str(result[0]) + " Kwh, Phase2 = " + str(result[1]) + " Kwh, Phase3 = " + str(result[2]) + " Kwh\n"
         logfile.write(log)
         logfile.close
         return result
