@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 #==================================================================================================================================
@@ -6,6 +6,8 @@
 #----------------------------------------------------------------------------------------------------------------------------------
 # by JahisLove - 2014, january
 # version 0.3 2014-04-07
+# version 0.4 2019-06-25 add custom myqsl port
+# version 0.5 2022-09-26 migrating to raspberry 4 and python3, no change to code , only python3-mysqldb installed 
 #----------------------------------------------------------------------------------------------------------------------------------
 # ce script est prevu pour fonctionner avec les appareils de mesure de consommation electrique OWL intuition-lc (3 phases)
 # utilisable en mono-phase pour surveiller 3 parties differentes d'un tableau electrique
@@ -16,8 +18,9 @@
 # dans mySQL des que celle ci est de nouveau dispo
 #
 # 
-# tested with python 2.7 on Raspberry pi (wheezy) and MySQL 5.1 on NAS Synology DS411J (DSM 4.1)
+# tested with python 2.7 on Raspberry pi 1B (wheezy) and MySQL 5.1 on NAS Synology DS411J (DSM 4.1)
 #                                                     MariaDB 5.5.34 on NAS Synology DS411J (DSM 5)
+# running with python 3 on rapsberry pi 4 (buuleyes) and MariaDB 10 on NAS synology DS916+ (DSM 6)
 #----------------------------------------------------------------------------------------------------------------------------------
 #
 # la base de données doit avoir cette structure: 
@@ -72,18 +75,18 @@ import struct
 import time
 import datetime
 import os.path
-import MySQLdb   # MySQLdb must be installed by yourself
+import MySQLdb   # python3-mysqldb must be installed by yourself
 import sys
 import sqlite3
 
 #-----------------------------------------------------------------#
 #  constants : use your own values / utilisez vos propres valeurs #
 #-----------------------------------------------------------------#
-PATH_OWL = "/home/pi/owl/" #path to this script
+PATH_OWL = "/home/jahislove/owl/" #path to this script
 ########## Tarif eletricity in euro/dollar/pound...
-costABO = '90.98'              # Standing Charge Per year / abonnement annuel 
-kwhCostFULL = '0.1572'           # normal rate per kwh      / tarif du KWh heure pleine 
-kwhCostECO = '0.1096'           # Economy rate per kwh     / tarif du KWh heure creuse 
+costABO = '144.36'              # Standing Charge Per year / abonnement annuel 
+kwhCostFULL = '0.1841'           # normal rate per kwh      / tarif du KWh heure pleine 
+kwhCostECO = '0.1470'           # Economy rate per kwh     / tarif du KWh heure creuse 
 
 ECO = [["",""],["",""]]  # add a ["",""] if you add a period below
 ECO[0][0] = '01:11:00'   # start 1st Economy rate / debut 1ere periode heure creuse  
@@ -93,10 +96,11 @@ ECO[1][1] = '14:10:00'  # end   2nd Economy rate / fin   2eme periode heure creu
 #ECO[2][0] = 'xx:xx:xx'  # start 3rd Economy rate / debut 3eme periode heure creuse .....
 #ECO[2][1] = 'xx:xx:xx'  # end   3rd Economy rate / fin   3eme periode heure creuse .....
 
-DB_SERVER ='192.168.0.111'  # MySQL : IP server (localhost if mySQL is on the same machine)
+DB_SERVER ='192.168.0.222'  # MySQL : IP server (localhost if mySQL is on the same machine)
+DB_PORT = 3307
 DB_BASE='owl_intuition'     # MySQL : database name
 DB_USER='owl_intuition'     # MySQL : user  
-DB_PWD='*******'            # MySQL : password 
+DB_PWD='ttp2570'            # MySQL : password 
 
 FREQUENCY = 1               # Periodicity (reduce data volume but lower current accuracy) (no impact on cost)
                             # (1 = all)     1 measure every 12 sec
@@ -140,7 +144,8 @@ def query_db(sql):
     global backup_mode
     global backup_row
     try:
-        db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE)
+        #db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE, DB_PORT)
+        db = MySQLdb.connect(host=DB_SERVER, user=DB_USER, passwd=DB_PWD, db=DB_BASE, port=DB_PORT)
         cursor = db.cursor()
         #---------------------------------------------------------------#
         #     Normal MySQL database INSERT                              #
@@ -247,7 +252,8 @@ def query_db(sql):
 #-----used once at first launch------------------------------#
 def query_db_2(sql):
     try:
-        db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE)
+        #db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE)
+        db = MySQLdb.connect(host=DB_SERVER, user=DB_USER, passwd=DB_PWD, db=DB_BASE, port=DB_PORT)
         cursor = db.cursor()
         cursor.execute(sql)
         result = cursor.fetchone ()
@@ -265,7 +271,8 @@ def query_db_2(sql):
 #-----used once at first launch------------------------------#
 def query_db_3(sql):
     try:
-        db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE)
+        #db = MySQLdb.connect(DB_SERVER, DB_USER, DB_PWD, DB_BASE, DB_PORT)
+        db = MySQLdb.connect(host=DB_SERVER, user=DB_USER, passwd=DB_PWD, db=DB_BASE, port=DB_PORT)
         cursor = db.cursor()
         cursor.execute(sql)
         result = cursor.fetchone ()
@@ -313,7 +320,7 @@ while True:
     datebuff = time.strftime('%Y-%m-%d %H:%M:%S') #formating date for mySQL
     
     # retrieve weather and write in mySQL table meteo
-    weather = re.match (r"<weather.*<temperature>([0-9]+\.[0-9]+)</temperature><text>(.*)</text>.*", buffer)
+    weather = re.match (r"<weather.*<temperature>([0-9]+\.[0-9]+)</temperature><text>(.*)</text>.*", buffer.decode('utf-8'))
     if weather:
         data["temp"] = float(weather.group(1))
         data["weather"] = weather.group(2)
@@ -327,10 +334,10 @@ while True:
     frequencyCount = 1    
 
     # Extracting data from buffer
-    signal = re.match (r"<electricity.*rssi='(-[0-9]+)' lqi='([0-9]+)'.*level='([0-9]+)%.*", buffer)
-    Phase1 = re.match (r"<electricity.*chan id='0'><curr units='w'>([0-9]+\.[0-9]+)</curr><day units='wh'>([0-9]+\.[0-9]+)</day.*", buffer)
-    Phase2 = re.match (r"<electricity.*chan id='1'><curr units='w'>([0-9]+\.[0-9]+)</curr><day units='wh'>([0-9]+\.[0-9]+)</day.*", buffer)
-    Phase3 = re.match (r"<electricity.*chan id='2'><curr units='w'>([0-9]+\.[0-9]+)</curr><day units='wh'>([0-9]+\.[0-9]+)</day.*", buffer)
+    signal = re.match (r"<electricity.*rssi='(-[0-9]+)' lqi='([0-9]+)'.*level='([0-9]+)%.*", buffer.decode('utf-8'))
+    Phase1 = re.match (r"<electricity.*chan id='0'><curr units='w'>([0-9]+\.[0-9]+)</curr><day units='wh'>([0-9]+\.[0-9]+)</day.*", buffer.decode('utf-8'))
+    Phase2 = re.match (r"<electricity.*chan id='1'><curr units='w'>([0-9]+\.[0-9]+)</curr><day units='wh'>([0-9]+\.[0-9]+)</day.*", buffer.decode('utf-8'))
+    Phase3 = re.match (r"<electricity.*chan id='2'><curr units='w'>([0-9]+\.[0-9]+)</curr><day units='wh'>([0-9]+\.[0-9]+)</day.*", buffer.decode('utf-8'))
 
     # retrieve 3 phases value, calculate cost and write in mySQL 
     if Phase1:
